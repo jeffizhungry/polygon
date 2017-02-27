@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"polymail-api/config"
+	"time"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/go-kit/kit/endpoint"
@@ -79,29 +81,50 @@ func encodeResponse(_ context.Context, w http.ResponseWriter, resp interface{}) 
 	return json.NewEncoder(w).Encode(resp)
 }
 
+/**************************************
+ * Middleware
+ *************************************/
+
+func poorManMetricsMiddleware(route string) endpoint.Middleware {
+	return func(next endpoint.Endpoint) endpoint.Endpoint {
+		return func(ctx context.Context, request interface{}) (interface{}, error) {
+			defer func(begin time.Time) {
+				logrus.WithField("route", route).Infof("Duration = %v", time.Since(begin))
+			}(time.Now())
+			return next(ctx, request)
+		}
+	}
+}
+
 func main() {
 
 	// Initialize services and inject dependencies
 	svc := NewStringService()
 
 	// Initialize endpoints
+	toLowerEndpoint := makeToLowerEndpoint(svc)
+	toLowerEndpoint = poorManMetricsMiddleware(toLowerEndpoint)
 	toLowerHandler := httptransport.NewServer(
 		context.Background(),
-		makeToLowerEndpoint(svc),
+		toLowerEndpoint,
 		decodeToLowerRequest,
 		encodeResponse,
 	)
 
+	toUpperEndpoint := makeToUpperEndpoint(svc)
+	toUpperEndpoint = poorManMetricsMiddleware(toUpperEndpoint)
 	toUpperHandler := httptransport.NewServer(
 		context.Background(),
-		makeToUpperEndpoint(svc),
+		toUpperEndpoint,
 		decodeToUpperRequest,
 		encodeResponse,
 	)
 
+	lengthEndpoint := makeLengthEndpoint(svc)
+	lengthEndpoint = poorManMetricsMiddleware(lengthEndpoint)
 	lengthHandler := httptransport.NewServer(
 		context.Background(),
-		makeLengthEndpoint(svc),
+		lengthEndpoint,
 		decodeLengthRequest,
 		encodeResponse,
 	)
@@ -112,6 +135,6 @@ func main() {
 	http.Handle("/length", lengthHandler)
 
 	// Start server
-	logrus.Info("Listening on...  localhost:8008")
-	logrus.Fatal(http.ListenAndServe(":8008", nil))
+	logrus.Info("Listening on...  %v", config.Server.Address())
+	logrus.Fatal(http.ListenAndServe(config.Server.Address(), nil))
 }

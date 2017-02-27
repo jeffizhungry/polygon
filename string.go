@@ -1,6 +1,10 @@
 package main
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/Sirupsen/logrus"
+)
 
 // StringService provides string operation
 type StringService interface {
@@ -10,11 +14,17 @@ type StringService interface {
 }
 
 func NewStringService() StringService {
-	return &stringResource{}
+	return &stringResource{
+		log: logrus.WithFields(logrus.Fields{
+			"context": "service.string",
+		}),
+	}
 }
 
 // stringResource implements the string service
-type stringResource struct{}
+type stringResource struct {
+	log *logrus.Entry
+}
 
 type ToUpperRequest struct {
 	S string `json:"s"`
