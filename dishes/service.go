@@ -1,7 +1,9 @@
+// Service implements the buisness logic for a service
 package dishes
 
 import (
 	"context"
+	"sync"
 
 	"github.com/jeffizhungry/polygon/models"
 	"github.com/pkg/errors"
@@ -25,15 +27,19 @@ type Service interface {
 func NewService() Service {
 	return &resource{
 		local: make(map[string]*models.Dish),
+		mu:    &sync.RWMutex{},
 	}
 }
 
 type resource struct {
 	local          map[string]*models.Dish
 	secondaryIndex []models.Dish
+	mu             *sync.RWMutex
 }
 
 func (r *resource) CreateDish(ctx context.Context, d models.DishParams) (*models.Dish, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
 	// Create model
 	dish := models.NewDish(d)
@@ -50,6 +56,8 @@ func (r *resource) CreateDish(ctx context.Context, d models.DishParams) (*models
 }
 
 func (r *resource) GetDish(ctx context.Context, id string) (*models.Dish, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 
 	// Get model
 	dish, found := r.local[id]
@@ -60,6 +68,8 @@ func (r *resource) GetDish(ctx context.Context, id string) (*models.Dish, error)
 }
 
 func (r *resource) UpdateDish(ctx context.Context, id string, params models.DishParams) (*models.Dish, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
 	// Get model
 	dish, found := r.local[id]
@@ -93,6 +103,8 @@ func (r *resource) UpdateDish(ctx context.Context, id string, params models.Dish
 }
 
 func (r *resource) DeleteDish(ctx context.Context, id string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
 	// Check if it exists
 	_, found := r.local[id]
@@ -113,6 +125,8 @@ func (r *resource) DeleteDish(ctx context.Context, id string) error {
 }
 
 func (r *resource) ListDishes(ctx context.Context, offset string, limit int) ([]models.Dish, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 
 	if limit > maxPageSize {
 		return nil, errors.Errorf("max page size is ", maxPageSize)
